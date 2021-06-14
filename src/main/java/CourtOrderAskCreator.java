@@ -1,15 +1,10 @@
-import org.apache.poi.hssf.usermodel.HSSFSheet;
-import org.apache.poi.hssf.usermodel.HSSFWorkbook;
-import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.xssf.usermodel.XSSFCell;
 import org.apache.poi.xssf.usermodel.XSSFRow;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.apache.poi.xwpf.usermodel.XWPFDocument;
-import org.apache.poi.xwpf.usermodel.XWPFParagraph;
-import org.apache.poi.xwpf.usermodel.XWPFRun;
+import org.apache.poi.xwpf.usermodel.*;
 
 import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
@@ -17,10 +12,16 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.Locale;
 import java.util.Scanner;
 
 public abstract class CourtOrderAskCreator {
+
+    private static String dirToSaveFiles;
+
     static void generate(){
 
         //I want to let user to return to prev menu, just in case he forgot to get the table
@@ -80,48 +81,82 @@ public abstract class CourtOrderAskCreator {
         }
         rowIterator.next();   //just skipping the headers
 
+        System.out.println("Нажмите ввод и выберите, куда сохранить файлы.");
+        scanner.nextLine();
+
+        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        openDialogStatus = chooser.showSaveDialog(null);
+        if (openDialogStatus == JFileChooser.APPROVE_OPTION){
+            dirToSaveFiles = chooser.getSelectedFile().getAbsolutePath();
+        } else {
+            System.out.println("Вы не выбрали папку для сохранения, возвращаюсь в начальное меню.");
+            return;
+        }
+
+        ArrayList<Debtor> listOfDebtors = new ArrayList<>();
+
         while (rowIterator.hasNext()){
             XSSFRow row = (XSSFRow) rowIterator.next();
-            createDocument(row);
+            listOfDebtors.add(new Debtor(row));
         }
+
+        //now creating documents iterating the list of debtors
+
+        for (Debtor debtor : listOfDebtors) createDocument(debtor);
 
 
     }
 
-    private static void createDocument(XSSFRow row){
-        //collecting data from the row. We have to unify it into an array of strings
-        //it is possible that the table is filled wrong, the cells types can be other than the strings
-        String[] fieldsOfTheRow = new String[11];
-        for (int i = 0; i < fieldsOfTheRow.length; i++){
-            XSSFCell cell = row.getCell(i);
-            String contentOfTheCell;
-            CellType cellType = cell.getCellType();
-            switch (cellType){
-                case STRING -> contentOfTheCell = cell.getStringCellValue();
-                case NUMERIC -> contentOfTheCell = cell.toString();
-                default -> contentOfTheCell = "Неверное значение в ячейке";
-            }
-            fieldsOfTheRow[i] = contentOfTheCell;
-        }
+    private static void createDocument(Debtor debtor){
 
         XWPFDocument requestForOrder = new XWPFDocument();
         //fill court name and address
-        XWPFParagraph courtNameAndAddress = requestForOrder.createParagraph();
-        XWPFRun run = courtNameAndAddress.createRun();
-        String text = "Мировому судье судебного участка №1 г. Ельца"+System.lineSeparator()+
-                "Елецкого городского судебного района липецкой области.";
+        XWPFParagraph Heading = requestForOrder.createParagraph();
+        Heading.setAlignment(ParagraphAlignment.RIGHT);
+
+        XWPFRun run = Heading.createRun();
         run.setFontSize(14);
         run.setFontFamily("Times New Roman");
-        run.setText(text);
+        run.setText("Мировому судье судебного участка №1 г. Ельца");
+        run.addBreak(BreakType.TEXT_WRAPPING);
+        run.setText("Елецкого городского судебного района");
+        run.addBreak(BreakType.TEXT_WRAPPING);
+        run.setText("Липецкой области.");
+        run.addBreak(BreakType.TEXT_WRAPPING);
+        run.setText("399770, Липецкая обл., г. Елец, ул. Коммунаров, д. 32");
+
+        //now the suitor
+        run.addBreak(BreakType.TEXT_WRAPPING);
+        run.addBreak(BreakType.TEXT_WRAPPING);
+        run.setText("Взыскатель:");
+        run.addBreak(BreakType.TEXT_WRAPPING);
+        //TODO уточнить
+        run.setText("ООО Вентремонт");
+        run.addBreak(BreakType.TEXT_WRAPPING);
+        run.setText("Полный адрес");
+
+        //debtor
+        run.addBreak(BreakType.TEXT_WRAPPING);
+        run.addBreak(BreakType.TEXT_WRAPPING);
+        run.setText("Должник:");
+        run.addBreak(BreakType.TEXT_WRAPPING);
+        run.setText(debtor.getName());
+        run.addBreak(BreakType.TEXT_WRAPPING);
+        run.setText("Дата рождения: " + debtor.getBirthdate().format(DateTimeFormatter.ofPattern("dd MMMM yyyy")) + "г.");
+        run.addBreak(BreakType.TEXT_WRAPPING);
+        //TODO continue here!
+        run.setText("");
+
 
         try {
-            File file = new File("file.docx");
+            File file = new File( dirToSaveFiles+"\\"+debtor.getName()+".docx");
             requestForOrder.write(new FileOutputStream(file));
-            System.out.println(file.getAbsolutePath());
         } catch (IOException e) {
             e.printStackTrace();
         }
 
 
+
     }
+
 }
